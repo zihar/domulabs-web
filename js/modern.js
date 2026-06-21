@@ -223,7 +223,7 @@
 			const body = encodeURIComponent(
 				"Name: " + name.value.trim() + "\nEmail: " + email.value.trim() + "\n\n" + message.value.trim()
 			);
-			window.location.href = "mailto:support@domulabs.com?subject=" + subject + "&body=" + body;
+			window.location.href = "mailto:zihar.mehta@gmail.com?subject=" + subject + "&body=" + body;
 			note.textContent = "Thanks! Opening your email app to send the message…";
 			note.classList.add("is-success");
 			form.reset();
