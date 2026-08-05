@@ -123,66 +123,35 @@
 
 	/* ---------- Lightbox ---------- */
 	const lightbox = $("#lightbox");
-	const lightboxImg = $("#lightboxImg");
-	const lightboxCap = $("#lightboxCaption");
-	const lightboxClose = $("#lightboxClose");
-	let lastFocused = null;
-	const openLightbox = (src, title) => {
-		lightboxImg.src = src;
-		lightboxImg.alt = title || "";
-		lightboxCap.textContent = title || "";
-		lightbox.classList.add("is-open");
-		lightbox.setAttribute("aria-hidden", "false");
-		document.body.style.overflow = "hidden";
-		lightboxClose.focus();
-	};
-	const hideLightbox = () => {
-		lightbox.classList.remove("is-open");
-		lightbox.setAttribute("aria-hidden", "true");
-		document.body.style.overflow = "";
-		if (lastFocused) lastFocused.focus();
-	};
-	$$(".work__zoom").forEach((btn) => {
-		btn.addEventListener("click", () => {
-			lastFocused = btn;
-			openLightbox(btn.dataset.full, btn.dataset.title);
-		});
-	});
-	lightboxClose.addEventListener("click", hideLightbox);
-	lightbox.addEventListener("click", (e) => { if (e.target === lightbox) hideLightbox(); });
-	document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lightbox.classList.contains("is-open")) hideLightbox(); });
-
-	/* ---------- Testimonials carousel ---------- */
-	const track = $("#quotesTrack");
-	if (track) {
-		const slides = $$(".quote", track);
-		const dotsWrap = $("#quotesDots");
-		let index = 0;
-		let timer = null;
-
-		slides.forEach((_, i) => {
-			const dot = document.createElement("button");
-			dot.setAttribute("role", "tab");
-			dot.setAttribute("aria-label", "Testimonial " + (i + 1));
-			dot.addEventListener("click", () => { goTo(i); restart(); });
-			dotsWrap.appendChild(dot);
-		});
-		const dots = $$("button", dotsWrap);
-
-		const goTo = (i) => {
-			index = (i + slides.length) % slides.length;
-			track.style.transform = "translateX(" + (-index * 100) + "%)";
-			dots.forEach((d, di) => d.classList.toggle("is-active", di === index));
+	if (lightbox) {
+		const lightboxImg = $("#lightboxImg");
+		const lightboxCap = $("#lightboxCaption");
+		const lightboxClose = $("#lightboxClose");
+		let lastFocused = null;
+		const openLightbox = (src, title) => {
+			lightboxImg.src = src;
+			lightboxImg.alt = title || "";
+			lightboxCap.textContent = title || "";
+			lightbox.classList.add("is-open");
+			lightbox.setAttribute("aria-hidden", "false");
+			document.body.style.overflow = "hidden";
+			lightboxClose.focus();
 		};
-		const next = () => goTo(index + 1);
-		const start = () => { if (!reduceMotion) timer = setInterval(next, 5500); };
-		const restart = () => { clearInterval(timer); start(); };
-
-		goTo(0);
-		start();
-		const quotes = $("#quotes");
-		quotes.addEventListener("mouseenter", () => clearInterval(timer));
-		quotes.addEventListener("mouseleave", start);
+		const hideLightbox = () => {
+			lightbox.classList.remove("is-open");
+			lightbox.setAttribute("aria-hidden", "true");
+			document.body.style.overflow = "";
+			if (lastFocused) lastFocused.focus();
+		};
+		$$(".work__zoom").forEach((btn) => {
+			btn.addEventListener("click", () => {
+				lastFocused = btn;
+				openLightbox(btn.dataset.full, btn.dataset.title);
+			});
+		});
+		lightboxClose.addEventListener("click", hideLightbox);
+		lightbox.addEventListener("click", (e) => { if (e.target === lightbox) hideLightbox(); });
+		document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lightbox.classList.contains("is-open")) hideLightbox(); });
 	}
 
 	/* ---------- FAQ: close others (accordion) ---------- */
@@ -193,14 +162,17 @@
 		});
 	});
 
-	/* ---------- Contact form ---------- */
+	/* ---------- Contact form (Web3Forms) ---------- */
+	// Get a free access key at https://web3forms.com (linked to zihar.mehta@gmail.com).
+	const WEB3FORMS_ACCESS_KEY = "YOUR_ACCESS_KEY_HERE";
 	const form = $("#contactForm");
 	if (form) {
 		const note = $("#formNote");
+		const submitBtn = form.querySelector("button[type='submit']");
 		const setInvalid = (input, bad) => input.closest(".field").classList.toggle("is-invalid", bad);
 		const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-		form.addEventListener("submit", (e) => {
+		form.addEventListener("submit", async (e) => {
 			e.preventDefault();
 			note.className = "form-note";
 			const name = form.elements["name"];
@@ -218,15 +190,42 @@
 
 			if (!ok) { note.textContent = "Please fill in the required fields correctly."; note.classList.add("is-error"); return; }
 
-			// No backend wired yet — hand off to the user's mail client.
-			const subject = encodeURIComponent(subjectInput.value.trim() || ("Project inquiry from " + name.value.trim()));
-			const body = encodeURIComponent(
-				"Name: " + name.value.trim() + "\nEmail: " + email.value.trim() + "\n\n" + message.value.trim()
-			);
-			window.location.href = "mailto:zihar.mehta@gmail.com?subject=" + subject + "&body=" + body;
-			note.textContent = "Thanks! Opening your email app to send the message…";
-			note.classList.add("is-success");
-			form.reset();
+			const payload = {
+				access_key: WEB3FORMS_ACCESS_KEY,
+				subject: subjectInput.value.trim() || ("Project inquiry from " + name.value.trim()),
+				from_name: "DomuLabs Website",
+				name: name.value.trim(),
+				email: email.value.trim(),
+				replyto: email.value.trim(),
+				message: message.value.trim(),
+				botcheck: form.elements["botcheck"] ? form.elements["botcheck"].checked : false
+			};
+
+			const btnLabel = submitBtn ? submitBtn.textContent : "";
+			if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Sending…"; }
+			note.textContent = "Sending your message…";
+
+			try {
+				const res = await fetch("https://api.web3forms.com/submit", {
+					method: "POST",
+					headers: { "Content-Type": "application/json", Accept: "application/json" },
+					body: JSON.stringify(payload)
+				});
+				const data = await res.json();
+				if (res.ok && data.success) {
+					note.textContent = "Thanks! Your message has been sent — we'll get back to you soon.";
+					note.classList.add("is-success");
+					form.reset();
+				} else {
+					note.textContent = (data && data.message) || "Something went wrong. Please try again or email us directly.";
+					note.classList.add("is-error");
+				}
+			} catch (err) {
+				note.textContent = "Network error. Please try again or email us directly.";
+				note.classList.add("is-error");
+			} finally {
+				if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = btnLabel; }
+			}
 		});
 
 		form.querySelectorAll("input, textarea").forEach((f) => {
