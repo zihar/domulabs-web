@@ -1,0 +1,100 @@
+<!--
+	Source for img/products/luna-trade-preview-light.png — the light-theme
+	Luna Trade card shown on hover. Rendered, not hand-drawn, so it can be
+	regenerated when the tagline or feature list changes.
+
+	Metrics (moon offset, 108px title, 985px tagline wrap) are traced from the
+	dark card so the two line up pixel-for-pixel during the hover cross-fade.
+	Changing them will make the swap visibly shift.
+
+	To regenerate — serve over http (file:// blocks the webfonts), screenshot
+	at exactly 1200x630, then quantize to keep it under ~120KB:
+
+	  python3 -m http.server 8099
+	  # capture http://localhost:8099/tools/luna-trade-card-light.html
+	  python3 -c "from PIL import Image; p='img/products/luna-trade-preview-light.png'; \
+	    Image.open(p).convert('RGB').quantize(colors=256, dither=Image.FLOYDSTEINBERG).save(p, optimize=True)"
+
+	The dark card has no source file — it predates this one.
+-->
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+	* { margin: 0; padding: 0; box-sizing: border-box; }
+
+	body { width: 1200px; height: 630px; overflow: hidden; }
+
+	.card {
+		position: relative;
+		width: 1200px;
+		height: 630px;
+		padding: 0 90px;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		font-family: "Inter", system-ui, sans-serif;
+		background: #FFFFFF;
+		background-image:
+			radial-gradient(620px 460px at 14% 34%, rgba(124, 92, 255, .10), transparent 70%),
+			radial-gradient(700px 520px at 92% 8%, rgba(91, 140, 255, .09), transparent 70%),
+			linear-gradient(160deg, #FFFFFF 0%, #F5F7FC 100%);
+	}
+
+	/* Metrics traced from the dark card so the two can cross-fade in place. */
+	.brand { display: flex; align-items: center; gap: 67px; margin-bottom: 48px; }
+
+	.moon { color: #6D4EF2; flex: none; margin-left: 25px; filter: drop-shadow(0 10px 26px rgba(109, 78, 242, .30)); }
+
+	.brand h1 {
+		font-size: 108px;
+		font-weight: 800;
+		letter-spacing: -.03em;
+		color: #0A0C12;
+	}
+
+	.tagline {
+		max-width: 985px;
+		font-size: 36px;
+		line-height: 1.42;
+		font-weight: 400;
+		color: #59637A;
+		letter-spacing: -.008em;
+	}
+	.tagline strong { font-weight: 700; color: #0A0C12; }
+
+	.meta {
+		position: absolute;
+		left: 90px;
+		bottom: 62px;
+		font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 20px;
+		font-weight: 600;
+		letter-spacing: .13em;
+		text-transform: uppercase;
+		color: #98A1B4;
+	}
+</style>
+
+<div class="card">
+	<div class="brand">
+		<svg class="moon" width="88" height="88" viewBox="0 0 100 100" aria-hidden="true">
+			<defs>
+				<mask id="crescent">
+					<rect width="100" height="100" fill="#fff"/>
+					<circle cx="68" cy="32" r="43" fill="#000"/>
+				</mask>
+			</defs>
+			<circle cx="50" cy="50" r="43" fill="currentColor" mask="url(#crescent)"/>
+		</svg>
+		<h1>Luna Trade</h1>
+	</div>
+
+	<p class="tagline">
+		<strong>Professional-grade charting</strong> with live prices, drawing
+		tools, bar replay, and economic news — all in one calm workspace.
+	</p>
+
+	<div class="meta">Charting · Replay · Paper trading · News · Alerts</div>
+</div>

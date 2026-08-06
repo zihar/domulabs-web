@@ -10,7 +10,13 @@ index.html        # markup semua section
 css/modern.css    # design system + styling + animasi
 js/modern.js      # interaksi vanilla (no dependency)
 img/              # logo + thumbnail & gambar portfolio
+tools/            # sumber kartu Luna Trade terang (dirender jadi PNG)
 ```
+
+Screenshot produk punya dua varian, `-dark` dan `-light`. Yang gelap jadi default;
+yang terang muncul saat hover lewat crossfade (`.theme-swap` di `css/modern.css`),
+dan dipagari `@media (hover: hover)` supaya di perangkat sentuh tetap gelap. Kedua
+varian harus sama ukuran dan tata letaknya — kalau tidak, pergantiannya bergeser.
 
 ## Menjalankan
 Buka lewat server lokal (disarankan, bukan double-click `file://`):
