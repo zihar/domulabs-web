@@ -3,17 +3,40 @@
 # DomuLabs — deploy to production
 #
 # The site is a static git checkout served straight by nginx:
-#   laptop --push--> GitHub --pull--> /var/www/html on EC2
-# No build step. Run from the repo root:  ./deploy.sh
+#   laptop --push--> GitHub --timer--> /var/www/html on EC2
+#
+# domulabs-deploy.timer runs on the server every minute and does a
+# `git reset --hard origin/main`, so the push IS the deploy. This script
+# pushes and then polls the live site until it serves exactly what is in
+# the working tree. No SSH (the server only accepts port 22 over the VPN)
+# and no build step. Run from the repo root:  ./deploy.sh
 # ============================================================
 set -euo pipefail
 
-SSH_HOST="forex-alertd"          # alias in ~/.ssh/config (ubuntu@18.136.57.118)
-DOCROOT="/var/www/html"          # nginx root for the `default` server block
 BRANCH="main"
 SITE="https://domudame.com"
+TIMEOUT=300                      # seconds to wait for the timer to pick up the push
+INTERVAL=10                      # seconds between polls
+
+# "<url path>:<local file it must match byte-for-byte>"
+PAGES=(
+	"/:index.html"
+	"/products.html:products.html"
+)
 
 cd "$(dirname "$0")"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# sha256 of a file — shasum on macOS, sha256sum on the Linux box.
+sha_of() {
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$1" | cut -d' ' -f1
+	else
+		sha256sum "$1" | cut -d' ' -f1
+	fi
+}
 
 # ---------- Preflight ----------
 current_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -28,50 +51,70 @@ if [ -n "$(git status --porcelain)" ]; then
 	exit 1
 fi
 
+for entry in "${PAGES[@]}"; do
+	file="${entry#*:}"
+	[ -f "$file" ] || { echo "✗ Missing local file '$file'." >&2; exit 1; }
+done
+
 local_sha=$(git rev-parse HEAD)
 echo "→ Deploying ${local_sha:0:7} ($(git log -1 --format=%s))"
 
 # ---------- Push ----------
 git push origin "$BRANCH"
 
-# ---------- Pull on the server ----------
-# The checkout is owned by www-data, so pull as that user to keep file
-# ownership intact and avoid git's dubious-ownership refusal.
-remote_sha=$(ssh "$SSH_HOST" "
-	set -e
-	sudo -u www-data git -C '$DOCROOT' fetch origin '$BRANCH' --quiet
-	sudo -u www-data git -C '$DOCROOT' reset --hard 'origin/$BRANCH' --quiet
-	sudo -u www-data git -C '$DOCROOT' rev-parse HEAD
-")
+# ---------- Wait for the server to serve it ----------
+# Hash the served bytes against the local file rather than comparing sizes:
+# an edit that keeps the length identical (2016 -> 2017) would slip past a
+# byte-count check.
+echo "→ Waiting for the deploy timer (polling every ${INTERVAL}s, up to ${TIMEOUT}s)"
 
-# ---------- Verify ----------
-# 'git pull' can print "Already up to date" even when files change, so trust
-# the commit hash and the live responses instead of the pull output.
-if [ "$remote_sha" != "$local_sha" ]; then
-	echo "✗ Server is at ${remote_sha:0:7}, expected ${local_sha:0:7}." >&2
-	exit 1
-fi
-echo "✓ Server checked out ${remote_sha:0:7}"
+deadline=$((SECONDS + TIMEOUT))
+attempt=0
+synced=0
 
-failed=0
-for path in "/" "/products.html"; do
-	code=$(curl -sS -o /dev/null -w '%{http_code}' "${SITE}${path}" --max-time 20)
-	printf '  %-16s %s\n' "$path" "$code"
-	[ "$code" = "200" ] || failed=1
+while :; do
+	attempt=$((attempt + 1))
+	in_sync=0
+
+	for entry in "${PAGES[@]}"; do
+		path="${entry%%:*}"
+		file="${entry#*:}"
+
+		# Cache-buster and no-cache header so a stale intermediary can never
+		# be mistaken for a completed deploy.
+		code=$(curl -sS --max-time 20 -H 'Cache-Control: no-cache' \
+			-o "$tmp/body" -w '%{http_code}' "${SITE}${path}?_=${attempt}") || code="000"
+
+		if [ "$code" = "200" ] && [ "$(sha_of "$tmp/body")" = "$(sha_of "$file")" ]; then
+			in_sync=$((in_sync + 1))
+		fi
+	done
+
+	if [ "$in_sync" -eq "${#PAGES[@]}" ]; then
+		synced=1
+		break
+	fi
+
+	if [ "$SECONDS" -ge "$deadline" ]; then
+		break
+	fi
+
+	printf '  [%3ds] %d/%d pages in sync\n' "$SECONDS" "$in_sync" "${#PAGES[@]}"
+	sleep "$INTERVAL"
 done
 
-if [ "$failed" -ne 0 ]; then
-	echo "✗ Live check failed." >&2
+# ---------- Report ----------
+if [ "$synced" -ne 1 ]; then
+	echo "✗ Still out of sync after ${TIMEOUT}s." >&2
+	echo "  The push landed, so the deploy timer on the server is likely stalled." >&2
+	echo "  On the VPN, check it with:" >&2
+	echo "    ssh forex-alertd 'systemctl status domulabs-deploy.timer domulabs-deploy.service'" >&2
 	exit 1
 fi
 
-# Compare the served homepage against the local file — catches a stale cache
-# or a checkout that silently did not update the working tree.
-live_bytes=$(curl -sS "${SITE}/" --max-time 20 | wc -c | tr -d ' ')
-local_bytes=$(wc -c < index.html | tr -d ' ')
-if [ "$live_bytes" != "$local_bytes" ]; then
-	echo "✗ index.html mismatch: live ${live_bytes}B vs local ${local_bytes}B." >&2
-	exit 1
-fi
-
-echo "✓ Live at $SITE (index.html ${live_bytes}B)"
+echo "✓ Live at $SITE"
+for entry in "${PAGES[@]}"; do
+	path="${entry%%:*}"
+	file="${entry#*:}"
+	printf '  %-16s 200  %sB\n' "$path" "$(wc -c < "$file" | tr -d ' ')"
+done
